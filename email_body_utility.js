@@ -517,7 +517,7 @@ const EmailBodyUtility = function() {
 
 		const _regex = /=\n/gm;
 
-		var fixed_body = body_text_encoded ? body_text_encoded.replace(/=\n/gm, '') : '';
+		var fixed_body = body_text_encoded ? (''+body_text_encoded).replace(/=\n/gm, '') : '';
 
 		var formatted_body = null;
 		try {
