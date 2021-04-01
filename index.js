@@ -21,6 +21,7 @@ const nodemailer = require('nodemailer');
 const redis = require('ioredis');
 
 const EmailBodyUtility = require('./email_body_utility');
+const EXPIRY_DATE_DIFF = 30*24*3600000;
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -36,6 +37,11 @@ exports.register = function () {
 	plugin.register_hook('init_child', 'initialize_mongodb');
 	plugin.register_hook('init_master', 'initialize_redis');
 	plugin.register_hook('init_child', 'initialize_redis');
+
+	// Enable for check receipient email address
+	if (plugin.cfg.enable.check_address === 'yes') {
+		plugin.register_hook('rcpt','hook_rcpt');
+	}
 
 	// Enable for queue
 	if (plugin.cfg.enable.queue === 'yes') {
@@ -221,6 +227,41 @@ exports.initialize_redis = function(next, server) {
 }
 
 // ------------------
+// Email check
+// ------------------
+exports.hook_rcpt = function(next, connection, params) {
+	var rcpt = params[0];
+	const plugin = this;
+	plugin.loginfo("Got recipient: " + rcpt);
+
+	server.notes.mongodb.collection(plugin.cfg.collections.address).findOne(
+		{_id:rcpt.format()},
+		function(err,email){
+			if (err){
+				plugin.logerror(err);
+				return next();
+			}
+			if (email){
+				if (email.block){
+					var reason = email.block;
+					if (!('string' === typeof reason))
+						reason = 'Address is blocked!'
+					return next(DENYSOFT,reason);
+				}
+				expiryDate = new Date(Date.now() + EXPIRY_DATE_DIFF )
+				if (email.mail_expiry)
+					expiryDate = new Date(Date.now() + email.mail_expiry*1000);
+				connection.transaction.expiryDate = expiryDate;
+				return next();
+			}
+			return next(DENYSOFT,'User not found!');
+		});
+}
+
+
+
+
+// ------------------
 // QUEUE
 // ------------------
 
@@ -353,7 +394,8 @@ exports.queue_to_mongodb = function(next, connection) {
 			'transferred' : false,
 			'processed' : false,
 			'extracted_html_from': email_object.extracted_html_from,
-			'extracted_text_from': email_object.extracted_text_from
+			'extracted_text_from': email_object.extracted_text_from,
+			'expiry': (connection && connection.transaction ? connection.transaction.expiryDate: new Date(Date.now()+30*24*3600000)),
 		};
 
 		// If we have a size limit
