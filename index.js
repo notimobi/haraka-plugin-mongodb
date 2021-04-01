@@ -40,7 +40,7 @@ exports.register = function () {
 
 	// Enable for check receipient email address
 	if (plugin.cfg.enable.check_address === 'yes') {
-		plugin.register_hook('rcpt','mongo_hook_rcpt');
+		plugin.register_hook('rcpt','mongo_hook_rcpt',-50);
 	}
 
 	// Enable for queue
@@ -244,7 +244,7 @@ exports.mongo_hook_rcpt = function(next, connection, params) {
 		function(err,email){
 			if (err){
 				plugin.logerror(err);
-				return next(OK);
+				return next();
 			}
 			if (email){
 				if (email.block){
