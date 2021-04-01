@@ -40,7 +40,7 @@ exports.register = function () {
 
 	// Enable for check receipient email address
 	if (plugin.cfg.enable.check_address === 'yes') {
-		plugin.register_hook('rcpt','hook_rcpt');
+		plugin.register_hook('rcpt','mongo_hook_rcpt');
 	}
 
 	// Enable for queue
@@ -159,6 +159,11 @@ exports.initialize_mongodb = function (next, server) {
 					'key' : { 'transferred' : 1, 'status' : 1, 'processed' : 1, 'timestamp' : 1 },
 					'background' : true
 				},
+				{
+					'key' : { 'expiry' : 1 },
+					'expireAfterSeconds': 3600, 
+					'background' : true
+				},
 			]);
 			// Limits
 			if ( plugin.cfg.limits.incoming === 'yes' && plugin.cfg.limits.db === 'mongodb' ) {
@@ -229,17 +234,17 @@ exports.initialize_redis = function(next, server) {
 // ------------------
 // Email check
 // ------------------
-exports.hook_rcpt = function(next, connection, params) {
+exports.mongo_hook_rcpt = function(next, connection, params) {
 	var rcpt = params[0];
 	const plugin = this;
 	plugin.loginfo("Got recipient: " + rcpt);
 
 	server.notes.mongodb.collection(plugin.cfg.collections.address).findOne(
-		{_id:rcpt.format()},
+		{_id:rcpt.address()},
 		function(err,email){
 			if (err){
 				plugin.logerror(err);
-				return next();
+				return next(OK);
 			}
 			if (email){
 				if (email.block){
@@ -252,7 +257,7 @@ exports.hook_rcpt = function(next, connection, params) {
 				if (email.mail_expiry)
 					expiryDate = new Date(Date.now() + email.mail_expiry*1000);
 				connection.transaction.expiryDate = expiryDate;
-				return next();
+				return next(OK);
 			}
 			return next(DENYSOFT,'User not found!');
 		});
